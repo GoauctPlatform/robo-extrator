@@ -11,6 +11,8 @@ Pipeline automatizado para coleta, enriquecimento, unificação e exportação d
 - **Download do Calendário de Leilões (`download_auction_calendar.py`)**: Exportação automática por estado com tratamento de downloads sem popups.
 - **Unificação & Merge (`combine_auction_csvs.py`, `merge_auction_data.py`)**: Junção de dados com estratégias progressivas de casamento de chaves.
 - **Geração Relacional (`generate_postgres_csvs.py`)**: Produz tabelas relacionais idempotentes para importação no PostgreSQL.
+- **Divisão & Envio (`split_csvs.py`, `send_to_platform.py`)**: Particiona os CSVs em 4 fatias e transfere para o backend da Goauct-Platform.
+- **Importação Remota Paralela (`remote_import_runner.py`)**: Orquestração multi-thread (4 partes paralelas) de importação para o banco de dados remoto da Goauct-Platform, respeitando a sequência relacional (Propriedades → Leilões → Vínculos/Histórico).
 - **Limpeza & Auditoria (`organize_and_audit.sh`)**: Versiona os artefatos de cada rodada na pasta `audit/` e reseta os checkpoints.
 
 ---
@@ -84,7 +86,17 @@ Acesse no navegador: **`http://localhost:5050`**
    python split_csvs.py
    python send_to_platform.py [--overwrite]
    ```
-5. **Limpeza e Auditoria:**
+5. **Importação Remota no Banco (Goauct-Platform):**
+   ```bash
+   # Executa as 3 etapas na ordem relacional correta (4 partes em paralelo cada):
+   python remote_import_runner.py --stage all
+
+   # Ou etapa por etapa individualmente:
+   python remote_import_runner.py --stage properties
+   python remote_import_runner.py --stage auctions
+   python remote_import_runner.py --stage history
+   ```
+6. **Limpeza e Auditoria:**
    ```bash
    bash organize_and_audit.sh
    ```
@@ -105,6 +117,7 @@ Acesse no navegador: **`http://localhost:5050`**
 ├── generate_postgres_csvs.py        # Geração de CSVs para PostgreSQL
 ├── split_csvs.py                    # Divisão dos CSVs em 4 partes
 ├── send_to_platform.py              # Exportação para Goauct-Platform (com controle de sobrescrita)
+├── remote_import_runner.py          # Importação remota paralela (Goauct-Platform)
 ├── organize_and_audit.sh            # Script de auditoria e arquivamento
 ├── requirements.txt                 # Dependências do projeto
 ├── .env.example                     # Template de variáveis de ambiente

@@ -28,14 +28,18 @@ PY = sys.executable
 BASH = shutil.which("bash") or r"C:\Program Files\Git\bin\bash.exe"
 
 SCRIPTS = {
-    "data_parcel": [PY,   "-u", "data_parcel_auct.py"],
-    "calendar":    [PY,   "-u", "download_auction_calendar.py"],
-    "combine":     [PY,   "-u", "combine_auction_csvs.py"],
-    "merge":       [PY,   "-u", "merge_auction_data.py"],
-    "postgres":    [PY,   "-u", "generate_postgres_csvs.py"],
-    "split":       [PY,   "-u", "split_csvs.py"],
-    "send":        [PY,   "-u", "send_to_platform.py"],
-    "audit":       [BASH,       "organize_and_audit.sh"],
+    "data_parcel":        [PY,   "-u", "data_parcel_auct.py"],
+    "calendar":           [PY,   "-u", "download_auction_calendar.py"],
+    "combine":            [PY,   "-u", "combine_auction_csvs.py"],
+    "merge":              [PY,   "-u", "merge_auction_data.py"],
+    "postgres":           [PY,   "-u", "generate_postgres_csvs.py"],
+    "split":              [PY,   "-u", "split_csvs.py"],
+    "send":               [PY,   "-u", "send_to_platform.py"],
+    "import_properties":  [PY,   "-u", "remote_import_runner.py", "--stage", "properties"],
+    "import_auctions":    [PY,   "-u", "remote_import_runner.py", "--stage", "auctions"],
+    "import_history":     [PY,   "-u", "remote_import_runner.py", "--stage", "history"],
+    "import_all":         [PY,   "-u", "remote_import_runner.py", "--stage", "all"],
+    "audit":              [BASH,       "organize_and_audit.sh"],
 }
 
 jobs  = {k: {"status": "idle", "lines": [], "process": None} for k in SCRIPTS}
@@ -344,6 +348,7 @@ main{
 #phase2{--phase-color:#06b6d4;--phase-rgb:6,182,212}
 #phase3{--phase-color:#10b981;--phase-rgb:16,185,129}
 #phase4{--phase-color:#38bdf8;--phase-rgb:56,189,248}
+#phase5{--phase-color:#a855f7;--phase-rgb:168,85,247}
 
 .card-option-row{
   padding:7px 16px;display:flex;align-items:center;gap:8px;
@@ -352,6 +357,26 @@ main{
 }
 .card-option-row input[type="checkbox"]{
   accent-color:#38bdf8;cursor:pointer;width:14px;height:14px;
+}
+
+/* ── Phase 5 Import Actions ── */
+.import-action-bar{
+  padding:12px 18px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--border);
+  background:rgba(168,85,247,.04);
+  flex-wrap:wrap;
+}
+.import-action-bar .import-label{
+  font-size:12px;font-weight:500;color:#c084fc;margin-right:4px;
+}
+.import-stage-label{
+  display:flex;align-items:center;gap:6px;
+  font-size:11.5px;font-weight:600;color:#d8b4fe;letter-spacing:-.01em;
+}
+.import-stage-label .stage-num{
+  background:rgba(168,85,247,.22);border:1px solid rgba(168,85,247,.4);
+  border-radius:6px;width:22px;height:22px;display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:700;color:#c084fc;
 }
 
 /* ── Responsive ── */
@@ -591,13 +616,107 @@ main{
   </div>
 </section>
 
+<!-- ═══════════ FASE 5 ═══════════ -->
+<section class="phase-section locked" id="phase5">
+  <div class="phase-header">
+    <div class="phase-num">5</div>
+    <div class="phase-title">
+      <h2>Importação Remota no Banco de Dados</h2>
+      <p>Importa os CSVs para o Goauct-Platform em paralelo, na sequência: Propriedades → Leilões → Vínculos</p>
+    </div>
+    <div class="phase-lock">🔒 Complete a Fase 4 primeiro</div>
+  </div>
+
+  <!-- Barra de ação global da fase 5 -->
+  <div class="import-action-bar">
+    <span class="import-label">Executar tudo em sequência:</span>
+    <button class="btn btn-green" id="btn-start-import_all" onclick="startScript('import_all')">🚀 Importar Tudo (Prop → Leilões → Vínculos)</button>
+    <button class="btn btn-red"   id="btn-stop-import_all"  onclick="killScript('import_all')" disabled>⏹ Parar</button>
+    <button class="btn btn-ghost" id="btn-reset-import_all" onclick="resetScript('import_all')" disabled>↺ Resetar</button>
+    <span class="badge badge-idle" id="badge-import_all" style="margin-left:auto"><span class="badge-dot"></span>Aguardando</span>
+  </div>
+
+  <div class="scripts-grid">
+
+    <!-- import_properties -->
+    <div class="script-card" id="card-import_properties">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="card-top">
+        <div class="card-identity">
+          <span class="card-icon">🏘️</span>
+          <div>
+            <div class="card-name">
+              <span class="import-stage-label"><span class="stage-num">1</span> Importar Propriedades</span>
+            </div>
+            <div class="card-filename">postgres_property_details_parte[1-4].csv (4× paralelo)</div>
+          </div>
+        </div>
+        <span class="badge badge-idle" id="badge-import_properties"><span class="badge-dot"></span>Aguardando</span>
+      </div>
+      <div class="card-actions-row">
+        <button class="btn btn-green" id="btn-start-import_properties" onclick="startScript('import_properties')">▶ Iniciar</button>
+        <button class="btn btn-red"   id="btn-stop-import_properties"  onclick="killScript('import_properties')" disabled>⏹ Parar</button>
+        <button class="btn btn-ghost" id="btn-reset-import_properties" onclick="resetScript('import_properties')" disabled>↺ Resetar</button>
+      </div>
+      <div class="terminal" id="terminal-import_properties"><div class="log-empty">Aguardando início...</div></div>
+    </div>
+
+    <!-- import_auctions -->
+    <div class="script-card" id="card-import_auctions">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="card-top">
+        <div class="card-identity">
+          <span class="card-icon">🏛️</span>
+          <div>
+            <div class="card-name">
+              <span class="import-stage-label"><span class="stage-num">2</span> Importar Leilões</span>
+            </div>
+            <div class="card-filename">postgres_auction_events_parte[1-4].csv --type auctions</div>
+          </div>
+        </div>
+        <span class="badge badge-idle" id="badge-import_auctions"><span class="badge-dot"></span>Aguardando</span>
+      </div>
+      <div class="card-actions-row">
+        <button class="btn btn-green" id="btn-start-import_auctions" onclick="startScript('import_auctions')">▶ Iniciar</button>
+        <button class="btn btn-red"   id="btn-stop-import_auctions"  onclick="killScript('import_auctions')" disabled>⏹ Parar</button>
+        <button class="btn btn-ghost" id="btn-reset-import_auctions" onclick="resetScript('import_auctions')" disabled>↺ Resetar</button>
+      </div>
+      <div class="terminal" id="terminal-import_auctions"><div class="log-empty">Aguardando início...</div></div>
+    </div>
+
+    <!-- import_history -->
+    <div class="script-card" id="card-import_history">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="card-top">
+        <div class="card-identity">
+          <span class="card-icon">🔗</span>
+          <div>
+            <div class="card-name">
+              <span class="import-stage-label"><span class="stage-num">3</span> Importar Vínculos / Histórico</span>
+            </div>
+            <div class="card-filename">postgres_property_auction_history_parte[1-4].csv --type history</div>
+          </div>
+        </div>
+        <span class="badge badge-idle" id="badge-import_history"><span class="badge-dot"></span>Aguardando</span>
+      </div>
+      <div class="card-actions-row">
+        <button class="btn btn-green" id="btn-start-import_history" onclick="startScript('import_history')">▶ Iniciar</button>
+        <button class="btn btn-red"   id="btn-stop-import_history"  onclick="killScript('import_history')" disabled>⏹ Parar</button>
+        <button class="btn btn-ghost" id="btn-reset-import_history" onclick="resetScript('import_history')" disabled>↺ Resetar</button>
+      </div>
+      <div class="terminal" id="terminal-import_history"><div class="log-empty">Aguardando início...</div></div>
+    </div>
+
+  </div>
+</section>
+
 <!-- ═══════════ AUDIT ═══════════ -->
 <div class="audit-wrap">
   <div class="audit-header">
     <span style="font-size:26px">🧹</span>
     <div class="audit-info">
       <h3>Limpar &amp; Auditar</h3>
-      <p>Move arquivos para pasta de auditoria e reseta checkpoints (Etapa final após a Fase 4)</p>
+      <p>Move arquivos para pasta de auditoria e reseta checkpoints (Etapa final após a Fase 5)</p>
     </div>
     <div class="audit-actions">
       <span class="badge badge-idle" id="badge-audit"><span class="badge-dot"></span>Pronto</span>
@@ -614,7 +733,7 @@ main{
 
 <script>
 // ─────────────────── State ───────────────────
-const cursors = {data_parcel:0, calendar:0, combine:0, merge:0, postgres:0, split:0, send:0, audit:0};
+const cursors = {data_parcel:0, calendar:0, combine:0, merge:0, postgres:0, split:0, send:0, import_properties:0, import_auctions:0, import_history:0, import_all:0, audit:0};
 const KEYS    = Object.keys(cursors);
 
 const STATUS_LABEL = {idle:'Aguardando', running:'Rodando', done:'Concluído', error:'Erro'};
@@ -625,15 +744,17 @@ function colorize(line) {
   const t   = line.trimEnd();
   if (!t) return '<div class="log-line log-def">&nbsp;</div>';
   const esc = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if (/✅|conclu|salvo|saved|done|success|finalizado|sucesso|copiado|sobrescrito/i.test(esc))
+  if (/✅|conclu|salvo|saved|done|success|finalizado|sucesso|copiado|sobrescrito|completed successfully|importadas com sucesso/i.test(esc))
     return `<div class="log-line log-ok">${esc}</div>`;
   if (/traceback|exception|critical/i.test(esc))
     return `<div class="log-line log-err">${esc}</div>`;
-  if (/⚠️|erro|error|warning|timeout|falha|fail|⛔|não autorizada|não encontrado/i.test(esc))
+  if (/⚠️|erro|error|warning|timeout|falha|fail|⛔|não autorizada|não encontrado|falharam/i.test(esc))
     return `<div class="log-line log-warn">${esc}</div>`;
-  if (/🔐|🚀|📥|📦|📂|🎉|🏠|🌐|✂️|🔍|🎯/i.test(esc))
+  if (/❌|failed|abortada/i.test(esc))
+    return `<div class="log-line log-err">${esc}</div>`;
+  if (/🔐|🚀|📥|📦|📂|🎉|🏠|🌐|✂️|🔍|🎯|🏘️|🏛️|🔗|🔄|Iniciando|Processing|Starting|Connected/i.test(esc))
     return `<div class="log-line log-info">${esc}</div>`;
-  if (/⏩|pulando|skip/i.test(esc))
+  if (/\u23e9|pulando|skip|Parte [1-4]/i.test(esc))
     return `<div class="log-line log-skip">${esc}</div>`;
   return `<div class="log-line log-def">${esc}</div>`;
 }
@@ -708,13 +829,16 @@ function updatePhases(s) {
   const p2done = s.combine === 'done' && s.merge === 'done';
   const p3done = s.postgres === 'done';
   const p4done = s.split === 'done' && s.send === 'done';
+  const p5done = s.import_properties === 'done' && s.import_auctions === 'done' && s.import_history === 'done';
 
   const p2 = document.getElementById('phase2');
   const p3 = document.getElementById('phase3');
   const p4 = document.getElementById('phase4');
+  const p5 = document.getElementById('phase5');
   if (p2) p2.classList.toggle('locked', !p1done);
   if (p3) p3.classList.toggle('locked', !p2done);
   if (p4) p4.classList.toggle('locked', !p3done);
+  if (p5) p5.classList.toggle('locked', !p4done);
 
   // Merge button only unlocked after combine done
   const bStartMerge = document.getElementById('btn-start-merge');
@@ -724,12 +848,26 @@ function updatePhases(s) {
     else if (combineOk && s.merge !== 'running') bStartMerge.disabled = false;
   }
 
-  // Send button disabled if split not done yet and send is idle
+  // Send button disabled if split not done yet
   const bStartSend = document.getElementById('btn-start-send');
   if (bStartSend && s.send !== 'running') {
     const splitOk = s.split === 'done';
     if (!splitOk && s.send === 'idle') bStartSend.disabled = true;
     else bStartSend.disabled = false;
+  }
+
+  // Import auctions only after properties done
+  const bStartAuctions = document.getElementById('btn-start-import_auctions');
+  if (bStartAuctions && s.import_auctions !== 'running') {
+    if (s.import_properties !== 'done') bStartAuctions.disabled = true;
+    else bStartAuctions.disabled = false;
+  }
+
+  // Import history only after auctions done
+  const bStartHistory = document.getElementById('btn-start-import_history');
+  if (bStartHistory && s.import_history !== 'running') {
+    if (s.import_auctions !== 'done') bStartHistory.disabled = true;
+    else bStartHistory.disabled = false;
   }
 
   // Global badge
@@ -743,7 +881,7 @@ function updatePhases(s) {
   } else if (anyError) {
     gb.className = 'badge badge-error';
     gb.innerHTML = '<span class="badge-dot"></span>Erro detectado';
-  } else if (p1done && p2done && p3done && p4done) {
+  } else if (p1done && p2done && p3done && p4done && p5done) {
     gb.className = 'badge badge-done';
     gb.innerHTML = '<span class="badge-dot"></span>Pipeline completo ✅';
   } else {
