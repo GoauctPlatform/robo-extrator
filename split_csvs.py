@@ -3,6 +3,13 @@ import csv
 import sys
 import math
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Increase field size limit for large fields to avoid errors
 maxInt = sys.maxsize
 while True:
@@ -14,33 +21,33 @@ while True:
 
 def split_csv(file_path, output_dir, num_parts=4):
     if not os.path.exists(file_path):
-        print(f"Erro: {file_path} não encontrado.")
-        return
+        print(f"❌ Erro: {file_path} não encontrado.")
+        return False
 
     base_name = os.path.basename(file_path)
     name, ext = os.path.splitext(base_name)
     
     # Passo 1: contar as linhas utilizando o módulo csv para contar corretamente
     # no caso de existirem quebras de linha dentro dos próprios campos
-    print(f"Contando as linhas do arquivo {file_path}...")
+    print(f"🔍 Contando as linhas do arquivo {file_path}...")
     total_data_rows = 0
     with open(file_path, 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
         try:
             header = next(reader)
         except StopIteration:
-            print(f"Erro: {file_path} está vazio.")
-            return
+            print(f"❌ Erro: {file_path} está vazio.")
+            return False
             
         for _ in reader:
             total_data_rows += 1
             
     if total_data_rows <= 0:
-        print(f"Erro: {file_path} não possui linhas de dados (apenas cabeçalho).")
-        return
+        print(f"❌ Erro: {file_path} não possui linhas de dados (apenas cabeçalho).")
+        return False
         
     rows_per_part = math.ceil(total_data_rows / num_parts)
-    print(f"Dividindo {file_path} em {num_parts} partes (aprox. {rows_per_part} linhas por parte)...")
+    print(f"✂️ Dividindo {file_path} em {num_parts} partes (total: {total_data_rows} linhas, aprox. {rows_per_part} linhas/parte)...")
     
     # Passo 2: Fazer a divisão real
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -74,9 +81,14 @@ def split_csv(file_path, output_dir, num_parts=4):
         if out_f and not out_f.closed:
             out_f.close()
             
-    print(f"Finalizado a divisão do arquivo {file_path}.")
+    print(f"✅ Finalizado com sucesso a divisão do arquivo {file_path} em {current_part} partes.")
+    return True
 
 if __name__ == "__main__":
+    print("=" * 60)
+    print("✂️  [DIVISÃO] Divisão dos CSVs PostgreSQL")
+    print("=" * 60)
+    
     # Lista dos arquivos que serão divididos
     files_to_split = [
         "postgres_auction_events.csv",
@@ -88,9 +100,26 @@ if __name__ == "__main__":
     output_directory = "split_postgres_csvs"
     os.makedirs(output_directory, exist_ok=True)
     
-    print("Iniciando o processo de divisão das planilhas...\n")
-    for filename in files_to_split:
-        split_csv(filename, output_directory)
-        print("-" * 40)
+    # Validação prévia de existência dos arquivos
+    missing_files = [f for f in files_to_split if not os.path.exists(f)]
+    if missing_files:
+        print(f"\n❌ ERRO: {len(missing_files)} arquivo(s) necessário(s) não foram encontrados:")
+        for mf in missing_files:
+            print(f"   • {mf}")
+        print("\n💡 Certifique-se de executar a Fase 3 (generate_postgres_csvs.py) antes de dividir.")
+        sys.exit(1)
         
-    print(f"Todos os arquivos foram processados. Você pode conferir os resultados na pasta '{output_directory}'.")
+    success_count = 0
+    for filename in files_to_split:
+        if split_csv(filename, output_directory):
+            success_count += 1
+        print("-" * 50)
+        
+    if success_count == len(files_to_split):
+        print(f"\n✅ SUCESSO: Todos os {success_count} arquivos foram divididos com sucesso!")
+        print(f"📂 Arquivos disponíveis na pasta '{output_directory}'.")
+        sys.exit(0)
+    else:
+        print(f"\n❌ ERRO: Apenas {success_count}/{len(files_to_split)} arquivos foram processados com sucesso.")
+        sys.exit(1)
+

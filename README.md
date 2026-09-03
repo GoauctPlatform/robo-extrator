@@ -44,33 +44,49 @@ PARCELFAIR_PASSWORD=sua_senha_aqui
 
 ## 🖥️ Como Usar
 
-### Opção 1: Pelo Dashboard Web (Recomendado)
+### Opção 1: Atalho na Área de Trabalho (Mais Fácil)
+Dê um duplo clique no ícone **Parcel Auction Dashboard** na sua Área de Trabalho (Desktop). O terminal iniciará o servidor e abrirá automaticamente o navegador em `http://localhost:5050`.
 
-Inicie o servidor local:
+> **Nota**: Para recriar o atalho no Desktop a qualquer momento, execute:
+> ```bash
+> python create_desktop_shortcut.py
+> ```
+
+### Opção 2: Pelo Script Batch / Linha de Comando
+Execute o inicializador:
+```cmd
+iniciar_dashboard.bat
+```
+Ou inicie o servidor Python diretamente:
 ```bash
-python3 dashboard_server.py
+python dashboard_server.py
 ```
 Acesse no navegador: **`http://localhost:5050`**
 
-### Opção 2: Linha de Comando (Passo a Passo)
+### Opção 3: Linha de Comando (Passo a Passo)
 
 1. **Coleta de dados:**
    ```bash
-   python3 data_parcel_auct.py
-   python3 download_auction_calendar.py
+   python data_parcel_auct.py
+   python download_auction_calendar.py
    ```
 2. **Combinação e Merge:**
    ```bash
-   python3 combine_auction_csvs.py
-   python3 merge_auction_data.py
+   python combine_auction_csvs.py
+   python merge_auction_data.py
    ```
 3. **Geração dos CSVs para PostgreSQL:**
    ```bash
-   python3 generate_postgres_csvs.py
+   python generate_postgres_csvs.py
    ```
-4. **Limpeza e Auditoria:**
+4. **Divisão e Envio para Goauct-Platform:**
    ```bash
-   ./organize_and_audit.sh
+   python split_csvs.py
+   python send_to_platform.py [--overwrite]
+   ```
+5. **Limpeza e Auditoria:**
+   ```bash
+   bash organize_and_audit.sh
    ```
 
 ---
@@ -80,14 +96,19 @@ Acesse no navegador: **`http://localhost:5050`**
 ```
 .
 ├── dashboard_server.py              # Interface Web em Flask
+├── iniciar_dashboard.bat            # Inicializador 1-clique (inicia servidor + abre navegador)
+├── create_desktop_shortcut.py       # Gerador do atalho na Área de Trabalho
 ├── data_parcel_auct.py              # Scraping de parcels
 ├── download_auction_calendar.py     # Download de calendários de leilão
 ├── combine_auction_csvs.py          # Concatenação de calendários
 ├── merge_auction_data.py            # Enriquecimento e merge de dados
 ├── generate_postgres_csvs.py        # Geração de CSVs para PostgreSQL
+├── split_csvs.py                    # Divisão dos CSVs em 4 partes
+├── send_to_platform.py              # Exportação para Goauct-Platform (com controle de sobrescrita)
 ├── organize_and_audit.sh            # Script de auditoria e arquivamento
 ├── requirements.txt                 # Dependências do projeto
 ├── .env.example                     # Template de variáveis de ambiente
 ├── .gitignore                       # Proteção de credenciais e datasets grandes
 └── Docs/                            # Documentação técnica detalhada
 ```
+

@@ -54,7 +54,7 @@ class IdempotenceValidator:
         """Executa generate_postgres_csvs.py"""
         self.log("info", f"Executando generate_postgres_csvs.py ({label})...")
         result = subprocess.run(
-            ["python3", os.path.join(self.base_dir, "generate_postgres_csvs.py")],
+            [sys.executable, os.path.join(self.base_dir, "generate_postgres_csvs.py")],
             cwd=self.base_dir,
             capture_output=True,
             text=True

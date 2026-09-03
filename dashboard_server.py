@@ -6,22 +6,36 @@ Open: http://localhost:5050
 
 Requirements: pip install flask
 """
+import sys
+import shutil
 import os
 import re
 import threading
 import subprocess
 from flask import Flask, jsonify, request
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 CWD  = os.path.dirname(os.path.abspath(__file__))
 app  = Flask(__name__)
 
+PY = sys.executable
+BASH = shutil.which("bash") or r"C:\Program Files\Git\bin\bash.exe"
+
 SCRIPTS = {
-    "data_parcel": ["python3", "-u", "data_parcel_auct.py"],
-    "calendar":    ["python3", "-u", "download_auction_calendar.py"],
-    "combine":     ["python3", "-u", "combine_auction_csvs.py"],
-    "merge":       ["python3", "-u", "merge_auction_data.py"],
-    "postgres":    ["python3", "-u", "generate_postgres_csvs.py"],
-    "audit":       ["bash",           "organize_and_audit.sh"],
+    "data_parcel": [PY,   "-u", "data_parcel_auct.py"],
+    "calendar":    [PY,   "-u", "download_auction_calendar.py"],
+    "combine":     [PY,   "-u", "combine_auction_csvs.py"],
+    "merge":       [PY,   "-u", "merge_auction_data.py"],
+    "postgres":    [PY,   "-u", "generate_postgres_csvs.py"],
+    "split":       [PY,   "-u", "split_csvs.py"],
+    "send":        [PY,   "-u", "send_to_platform.py"],
+    "audit":       [BASH,       "organize_and_audit.sh"],
 }
 
 jobs  = {k: {"status": "idle", "lines": [], "process": None} for k in SCRIPTS}
@@ -29,12 +43,14 @@ _lock = threading.Lock()
 ANSI  = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
-def run_job(key: str):
-    cmd = SCRIPTS[key]
+def run_job(key: str, extra_args: list = None):
+    cmd = list(SCRIPTS[key])
+    if extra_args:
+        cmd.extend(extra_args)
     with _lock:
         jobs[key].update(status="running", lines=[])
     try:
-        env  = {**os.environ, "PYTHONUNBUFFERED": "1"}
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         proc = subprocess.Popen(
             cmd, cwd=CWD,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -69,7 +85,15 @@ def api_run(key):
     with _lock:
         if jobs[key]["status"] == "running":
             return jsonify(error="já em execução"), 409
-    threading.Thread(target=run_job, args=(key,), daemon=True).start()
+
+    extra_args = []
+    overwrite = request.args.get("overwrite")
+    if overwrite is None and request.is_json:
+        overwrite = request.json.get("overwrite")
+    if str(overwrite).lower() in ("true", "1") and key == "send":
+        extra_args.append("--overwrite")
+
+    threading.Thread(target=run_job, args=(key, extra_args), daemon=True).start()
     return jsonify(ok=True)
 
 @app.route("/api/kill/<key>", methods=["POST"])
@@ -319,6 +343,16 @@ main{
 #phase1{--phase-color:#8b5cf6;--phase-rgb:139,92,246}
 #phase2{--phase-color:#06b6d4;--phase-rgb:6,182,212}
 #phase3{--phase-color:#10b981;--phase-rgb:16,185,129}
+#phase4{--phase-color:#38bdf8;--phase-rgb:56,189,248}
+
+.card-option-row{
+  padding:7px 16px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border);background:rgba(56,189,248,.03);
+  font-size:11.5px;color:#cbd5e1;cursor:pointer;user-select:none;
+}
+.card-option-row input[type="checkbox"]{
+  accent-color:#38bdf8;cursor:pointer;width:14px;height:14px;
+}
 
 /* ── Responsive ── */
 @media(max-width:600px){
@@ -496,13 +530,74 @@ main{
   </div>
 </section>
 
+<!-- ═══════════ FASE 4 ═══════════ -->
+<section class="phase-section locked" id="phase4">
+  <div class="phase-header">
+    <div class="phase-num">4</div>
+    <div class="phase-title">
+      <h2>Divisão &amp; Exportação para Plataforma</h2>
+      <p>Divide os CSVs PostgreSQL em partes e transfere para o backend do Goauct-Platform</p>
+    </div>
+    <div class="phase-lock">🔒 Complete a Fase 3 primeiro</div>
+  </div>
+  <div class="scripts-grid">
+
+    <!-- split_csvs -->
+    <div class="script-card" id="card-split">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="card-top">
+        <div class="card-identity">
+          <span class="card-icon">✂️</span>
+          <div>
+            <div class="card-name">Divisão dos CSVs</div>
+            <div class="card-filename">split_csvs.py</div>
+          </div>
+        </div>
+        <span class="badge badge-idle" id="badge-split"><span class="badge-dot"></span>Aguardando</span>
+      </div>
+      <div class="card-actions-row">
+        <button class="btn btn-green" id="btn-start-split" onclick="startScript('split')">▶ Dividir CSVs</button>
+        <button class="btn btn-red"   id="btn-stop-split"  onclick="killScript('split')"  disabled>⏹ Parar</button>
+        <button class="btn btn-ghost" id="btn-reset-split" onclick="resetScript('split')" disabled>↺ Resetar</button>
+      </div>
+      <div class="terminal" id="terminal-split"><div class="log-empty">Aguardando início...</div></div>
+    </div>
+
+    <!-- send_to_platform -->
+    <div class="script-card" id="card-send">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="card-top">
+        <div class="card-identity">
+          <span class="card-icon">🚀</span>
+          <div>
+            <div class="card-name">Exportar para Goauct-Platform</div>
+            <div class="card-filename">send_to_platform.py</div>
+          </div>
+        </div>
+        <span class="badge badge-idle" id="badge-send"><span class="badge-dot"></span>Aguardando</span>
+      </div>
+      <div class="card-actions-row">
+        <button class="btn btn-green" id="btn-start-send" onclick="startScript('send')">▶ Iniciar Envio</button>
+        <button class="btn btn-red"   id="btn-stop-send"  onclick="killScript('send')"  disabled>⏹ Parar</button>
+        <button class="btn btn-ghost" id="btn-reset-send" onclick="resetScript('send')" disabled>↺ Resetar</button>
+      </div>
+      <label class="card-option-row" for="chk-overwrite-send" title="Quando marcado, autoriza a substituição dos arquivos que já existirem na pasta de destino com o mesmo nome">
+        <input type="checkbox" id="chk-overwrite-send">
+        <span>Autorizar sobrescrever arquivos existentes no destino</span>
+      </label>
+      <div class="terminal" id="terminal-send"><div class="log-empty">Aguardando início...</div></div>
+    </div>
+
+  </div>
+</section>
+
 <!-- ═══════════ AUDIT ═══════════ -->
 <div class="audit-wrap">
   <div class="audit-header">
     <span style="font-size:26px">🧹</span>
     <div class="audit-info">
       <h3>Limpar &amp; Auditar</h3>
-      <p>Move arquivos para pasta de auditoria e reseta todos os checkpoints</p>
+      <p>Move arquivos para pasta de auditoria e reseta checkpoints (Etapa final após a Fase 4)</p>
     </div>
     <div class="audit-actions">
       <span class="badge badge-idle" id="badge-audit"><span class="badge-dot"></span>Pronto</span>
@@ -519,7 +614,7 @@ main{
 
 <script>
 // ─────────────────── State ───────────────────
-const cursors = {data_parcel:0, calendar:0, combine:0, merge:0, postgres:0, audit:0};
+const cursors = {data_parcel:0, calendar:0, combine:0, merge:0, postgres:0, split:0, send:0, audit:0};
 const KEYS    = Object.keys(cursors);
 
 const STATUS_LABEL = {idle:'Aguardando', running:'Rodando', done:'Concluído', error:'Erro'};
@@ -530,13 +625,13 @@ function colorize(line) {
   const t   = line.trimEnd();
   if (!t) return '<div class="log-line log-def">&nbsp;</div>';
   const esc = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if (/✅|conclu|salvo|saved|done|success|finalizado/i.test(esc))
+  if (/✅|conclu|salvo|saved|done|success|finalizado|sucesso|copiado|sobrescrito/i.test(esc))
     return `<div class="log-line log-ok">${esc}</div>`;
   if (/traceback|exception|critical/i.test(esc))
     return `<div class="log-line log-err">${esc}</div>`;
-  if (/⚠️|erro|error|warning|timeout|falha|fail/i.test(esc))
+  if (/⚠️|erro|error|warning|timeout|falha|fail|⛔|não autorizada|não encontrado/i.test(esc))
     return `<div class="log-line log-warn">${esc}</div>`;
-  if (/🔐|🚀|📥|📦|📂|🎉|🏠|🌐/i.test(esc))
+  if (/🔐|🚀|📥|📦|📂|🎉|🏠|🌐|✂️|🔍|🎯/i.test(esc))
     return `<div class="log-line log-info">${esc}</div>`;
   if (/⏩|pulando|skip/i.test(esc))
     return `<div class="log-line log-skip">${esc}</div>`;
@@ -548,7 +643,14 @@ async function startScript(key) {
   cursors[key] = 0;
   const term = document.getElementById(`terminal-${key}`);
   if (term) term.innerHTML = '';
-  try { await fetch(`/api/run/${key}`, {method:'POST'}); } catch(e) {}
+  let url = `/api/run/${key}`;
+  if (key === 'send') {
+    const chk = document.getElementById('chk-overwrite-send');
+    if (chk && chk.checked) {
+      url += '?overwrite=true';
+    }
+  }
+  try { await fetch(url, {method:'POST'}); } catch(e) {}
 }
 async function killScript(key) {
   try { await fetch(`/api/kill/${key}`, {method:'POST'}); } catch(e) {}
@@ -604,10 +706,15 @@ async function fetchLogs(key) {
 function updatePhases(s) {
   const p1done = s.data_parcel === 'done' && s.calendar === 'done';
   const p2done = s.combine === 'done' && s.merge === 'done';
+  const p3done = s.postgres === 'done';
+  const p4done = s.split === 'done' && s.send === 'done';
+
   const p2 = document.getElementById('phase2');
   const p3 = document.getElementById('phase3');
+  const p4 = document.getElementById('phase4');
   if (p2) p2.classList.toggle('locked', !p1done);
   if (p3) p3.classList.toggle('locked', !p2done);
+  if (p4) p4.classList.toggle('locked', !p3done);
 
   // Merge button only unlocked after combine done
   const bStartMerge = document.getElementById('btn-start-merge');
@@ -615,6 +722,14 @@ function updatePhases(s) {
     const combineOk = s.combine === 'done';
     if (!combineOk && s.merge !== 'running') bStartMerge.disabled = true;
     else if (combineOk && s.merge !== 'running') bStartMerge.disabled = false;
+  }
+
+  // Send button disabled if split not done yet and send is idle
+  const bStartSend = document.getElementById('btn-start-send');
+  if (bStartSend && s.send !== 'running') {
+    const splitOk = s.split === 'done';
+    if (!splitOk && s.send === 'idle') bStartSend.disabled = true;
+    else bStartSend.disabled = false;
   }
 
   // Global badge
@@ -628,7 +743,7 @@ function updatePhases(s) {
   } else if (anyError) {
     gb.className = 'badge badge-error';
     gb.innerHTML = '<span class="badge-dot"></span>Erro detectado';
-  } else if (p1done && p2done && s.postgres === 'done') {
+  } else if (p1done && p2done && p3done && p4done) {
     gb.className = 'badge badge-done';
     gb.innerHTML = '<span class="badge-dot"></span>Pipeline completo ✅';
   } else {
@@ -658,8 +773,17 @@ setInterval(poll, 1500);
 
 
 if __name__ == "__main__":
-    print("\n" + "═" * 52)
-    print("  🏠  Parcel Auction Pipeline Dashboard")
-    print("  🌐  Acesse: http://localhost:5050")
-    print("═" * 52 + "\n")
+    print("\n" + "=" * 52)
+    print("  [*]  Parcel Auction Pipeline Dashboard")
+    print("  [>]  Acesse: http://localhost:5050")
+    print("=" * 52 + "\n")
+
+    def _auto_open():
+        import time
+        import webbrowser
+        time.sleep(1.0)
+        webbrowser.open("http://localhost:5050")
+
+    threading.Thread(target=_auto_open, daemon=True).start()
     app.run("0.0.0.0", 5050, debug=False, threaded=True)
+
