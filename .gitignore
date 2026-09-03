@@ -1,0 +1,59 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+ENV/
+
+# Data & CSV files (large datasets & exports)
+*.csv
+*.xlsx
+*.xls
+*.crdownload
+*.txt
+!merge_report.txt
+!requirements.txt
+
+# Generated directories & Historical runs
+audit/
+previous_exports/
+parcelfair_auction_parcels_csvs/
+parcelfair_csv_auctions/
+split_postgres_csvs/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Screenshots / Logs
+*.png
+*.log
